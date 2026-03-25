@@ -3,7 +3,7 @@
 # pyPMX.py
 #
 # SPDX-License-Identifier: MIT
-# SPDX-FileCopyrightText: (C) 2025 mukyokyo
+# SPDX-FileCopyrightText: (C) 2025-2026 mukyokyo
 
 
 import serial, socket, errno, threading, array, time
