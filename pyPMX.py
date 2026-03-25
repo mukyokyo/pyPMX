@@ -4,12 +4,13 @@
 # pyPMX.py
 #
 # SPDX-License-Identifier: MIT
-# SPDX-FileCopyrightText: (C) 2024 mukyokyo
+# SPDX-FileCopyrightText: (C) 2025 mukyokyo
 
-import serial, threading, array, struct
+
+import serial, socket, errno, threading, array, time
 from typing import Union
-from collections import namedtuple
 from struct import pack, unpack, iter_unpack
+
 
 ##########################################################
 # Functionalized the part of converting int to bytes.
@@ -21,34 +22,37 @@ def B2Bs(d) -> bytes:
   else:
     return bytes(pack('<B', ((d & 0x7f) | 0x80) if d < 0 else d))
 
+
 def W2Bs(d) -> bytes:
   if isinstance(d, list) or isinstance(d, tuple):
-    return b''.join([pack('<H',d) for d in [((d & 0x7fff) | 0x8000) if d < 0 else d for d in d]])
+    return b''.join([pack('<H', d) for d in [((d & 0x7fff) | 0x8000) if d < 0 else d for d in d]])
   else:
     return bytes(pack('<H', ((d & 0x7fff) | 0x8000) if d < 0 else d))
 
+
 def L2Bs(d) -> bytes:
   if isinstance(d, list) or isinstance(d, tuple):
-    return b''.join([pack('<I',d) for d in [((d & 0x7fffffff) | 0x80000000) if d < 0 else d for d in d]])
+    return b''.join([pack('<I', d) for d in [((d & 0x7fffffff) | 0x80000000) if d < 0 else d for d in d]])
   else:
     return bytes(pack('<I', ((d & 0x7fffffff) | 0x80000000) if d < 0 else d))
+
 
 ##########################################################
 # API for Kondo PMX
 ##########################################################
 class PMXProtocol:
-  BROADCASTING_ID  = 0xff
-  CMD_MemREAD      = 0xa0
-  CMD_MemWRITE     = 0xa1
-  CMD_LOAD         = 0xa2
-  CMD_SAVE         = 0xa3
-  CMD_MotorREAD    = 0xa4
-  CMD_MotorWRITE   = 0xa5
-  CMD_SystemREAD   = 0xbb
-  CMD_SystemWRITE  = 0xbc
-  CMD_ReBoot       = 0xbd
+  BROADCASTING_ID = 0xff
+  CMD_MemREAD = 0xa0
+  CMD_MemWRITE = 0xa1
+  CMD_LOAD = 0xa2
+  CMD_SAVE = 0xa3
+  CMD_MotorREAD = 0xa4
+  CMD_MotorWRITE = 0xa5
+  CMD_SystemREAD = 0xbb
+  CMD_SystemWRITE = 0xbc
+  CMD_ReBoot = 0xbd
   CMD_FactoryReset = 0xbe
-  CMD_SystemINIT   = 0xbf
+  CMD_SystemINIT = 0xbf
 
   (SYSW_BAUD_57600, SYSW_BAUD_115_2k, SYSW_BAUD_625k, SYSW_BAUD_1M, SYSW_BAUD_1_25M, SYSW_BAUD_1_5M, SYSW_BAUD_2M, SYSW_BAUD_3M) = range(8)
   (SYSW_PARITY_NONE, SYSW_PARITY_ODD, SYSW_PARITY_EVEN) = range(3)
@@ -56,17 +60,33 @@ class PMXProtocol:
 
   __crc16_lutable = array.array('H')
 
-  def __init__(self, port : Union[serial.Serial, str], baudrate = 57600, timeout = 0.05, lock = None):
+  def __init__(self, port: Union[serial.Serial, socket.socket, str], baudrate=57600, timeout=0.01, timeoutoffset=0.05, lock=None, protocoltype=0):
     if isinstance(port, serial.Serial):
       self.__serial = port
+      self.__sock = None
       self.__baudrate = port.baudrate
       self.__timeout = port.timeout
+      for i in range(60000):
+        self.__serial.reset_input_buffer()
+    elif isinstance(port, socket.socket):
+      self.__serial = None
+      self.__sock = port
+      self.__baudrate = baudrate
+      self.__timeout = timeout
+      self.__sock.settimeout(abs(timeout))
+      self.__protocoltype = protocoltype
+      self.__send_uart_conf(baudrate)
     else:
-      self.__serial = serial.Serial(port, baudrate = baudrate, timeout = timeout)
+      self.__serial = serial.Serial(port, baudrate=baudrate, timeout=timeout)
+      self.__sock = None
       self.__baudrate = self.__serial.baudrate
       self.__timeout = self.__serial.timeout
+      for i in range(60000):
+        self.__serial.reset_input_buffer()
 
-    if lock == None:
+    self.__offsettime = abs(timeoutoffset)
+
+    if lock is None:
       self.__lock = threading.Lock()
     else:
       self.__lock = lock
@@ -78,8 +98,31 @@ class PMXProtocol:
         nAccum = (poly ^ (nAccum << 1) if nAccum & 0x8000 else nAccum << 1) & 0xffff
       self.__crc16_lutable.append(nAccum)
 
-  def __del__(self):
-    del self.__crc16_lutable[:]
+  def __enter__(self):
+    return self
+
+  def __exit__(self, ex_type, ex_value, trace):
+    if self.__serial is not None:
+      self.__serial.close()
+
+  def __send_uart_conf(self, baud):
+    if self.__protocoltype == 1:
+      pconf_packet = bytearray([0x55, 0xaa, 0x55, 0, 0, 0, 0x83, 0])
+      pconf_packet[3] = (baud >> 16) & 0xff
+      pconf_packet[4] = (baud >> 8) & 0xff
+      pconf_packet[5] = (baud) & 0xff
+      pconf_packet[7] = sum(pconf_packet[3:7]) & 0xff
+      try:
+        self.__sock.sendall(pconf_packet)
+      except socket.timeout:
+        return False
+    elif self.__protocoltype == 2:
+      pconf_packet = bytearray([ord('a'), 16]) + L2Bs(baud) + bytearray([ord('a'), 17, 8, 0, 0])
+      try:
+        self.__sock.sendall(pconf_packet)
+      except socket.timeout:
+        return False
+    return True
 
   @property
   def lock(self):
@@ -96,71 +139,143 @@ class PMXProtocol:
 
   @property
   def timeout(self):
-    return self.__serial.timeout
+    return self.__timeout
 
   @timeout.setter
   def timeout(self, timeout):
     self.__timeout = timeout
-    self.__serial.timeout = timeout
+    if self.__sock:
+      self.__sock.settimeout(timeout)
+    else:
+      self.__serial.timeout = timeout
 
   def __reconfig(self):
-    self.__serial.baudrate = self.__baudrate
-    self.__serial.timeout = self.__timeout
+    if self.__sock:
+      self.__sock.settimeout(self.__timeout)
+    else:
+      self.__serial.baudrate = self.__baudrate
+      self.__serial.timeout = self.__timeout
 
   @property
   def status(self):
     return self.__status
 
-  def __crc16(self, data : bytes) -> int:
+  def __crc16(self, data: bytes) -> int:
     crc = 0
     for d in data:
       crc = (crc << 8) ^ self.__crc16_lutable[((crc >> 8) ^ d) & 0xff]
     return crc & 0xffff
 
-  def TxPacket(self, id : int, cmd : int, opt : int, param : bytes, echo = False) -> (bytes, bool):
+  def __clear_sock_rx_buf(self):
+    try:
+      self.__sock.setblocking(False)
+      while True:
+        data = self.__sock.recv(65536)
+        if not data:
+          break
+    except socket.error as e:
+      if e.errno == errno.EAGAIN or e.errno == errno.EWOULDBLOCK:
+        pass  # buffer is empty
+      else:
+        raise  # Other errors can be reproduced
+    finally:
+      self.__sock.setblocking(True)
+      self.__sock.settimeout(self.__timeout)
+
+  def __calctransmittime(self, length):
+    return 10 * length / self.__baudrate
+
+  def TxPacket(self, id: int, cmd: int, opt: int, param: bytes, echo=False, wait=-1.0) -> (bytes, bool):
     self.__reconfig()
     if ((id >= 0 and id <= 239) or id == self.BROADCASTING_ID) and len(param) <= (256 - 8):
-      txp = bytes([0xfe,0xfe,id,len(param) + 8,cmd,opt]) + bytes(param)
+      txp = bytes([0xfe, 0xfe, id, len(param) + 8, cmd, opt]) + bytes(param)
       txp += W2Bs(self.__crc16(txp))
-      self.__serial.reset_input_buffer()
-      if echo: print('TX:', txp.hex(':'))
-      self.__serial.write(txp)
+      if echo:
+        print('TX:', txp.hex(':'))
+      if self.__sock:
+        self.__clear_sock_rx_buf()
+        try:
+          if self.__protocoltype == 2:
+            self.__sock.sendall(txp.replace(b'a', b'a\0'))
+          else:
+            self.__sock.sendall(txp)
+        except socket.timeout:
+          return None, False
+      else:
+        self.__serial.reset_input_buffer()
+        self.__serial.write(txp)
+      if wait >= 0:
+        if not self.__sock:
+          self.__serial.flush()
+        t = self.__calctransmittime(len(txp))
+        if wait > t:
+          time.sleep(wait - t)
+        else:
+          time.sleep(t)
       return txp, True
     return None, False
 
+  def __rx_sock(self, length) -> bytes:
+    try:
+      s = self.__sock.recv(length)
+      return s
+    except TimeoutError:
+      return b''
+
   def __rx(self, length) -> bytes:
-    s = self.__serial.read(length)
-    l = len(s)
-    if l == length:
+    tout = time.time() + self.__calctransmittime(length) + self.__offsettime
+    s = self.__rx_sock(length) if self.__sock else self.__serial.read(length)
+    rxl = len(s)
+    if rxl == length:
       return s
     else:
-      r = s
-      length -= l
-      if length > 0:
-        while self.__serial.in_waiting > 0:
-          s = self.__serial.read(length)
-          r += s
-          length -= len(s)
-          if length <= 0:
+      length -= rxl
+      while tout > time.time() and length > 0:
+        if length > 0:
+          r = self.__rx_sock(length) if self.__sock else self.__serial.read(length)
+          s += r
+          length -= len(r)
+          if length == 0:
             break
-      return r
+      return s
 
-  def RxPacket(self, echo = False) -> (bytes, bool):
+  def RxPacket(self, echo=False, timeout=0.0) -> (bytes, bool):
+    if timeout > 0:
+      if self.__sock:
+        prev_timeout = self.__sock.gettimeout()
+        self.__sock.settimeout(timeout)
+      else:
+        prev_timeout = self.__serial.timeout
+        self.__serial.timeout = timeout
+        self.__serial.flushOutput()
+    self.__status = 0
     rxp = self.__rx(6)
     if rxp:
       if len(rxp) == 6:
         if rxp[3] > 0:
-          l = rxp[3] - 6
-          if l > 0:
-            rxp += self.__rx(l)
-            if len(rxp) == l + 6 and rxp[0] == 0xfe and rxp[1] == 0xfe and unpack('<H', rxp[-2:])[0] == self.__crc16(rxp[:-2]):
+          pl = rxp[3] - 6
+          if pl > 0:
+            rxp += self.__rx(pl)
+            if len(rxp) == pl + 6 and rxp[0] == 0xfe and rxp[1] == 0xfe and unpack('<H', rxp[-2:])[0] == self.__crc16(rxp[:-2]):
               self.__status = rxp[5]
-              if echo: print('RX:', rxp.hex(':'))
+              if echo:
+                print('RX:', rxp.hex(':'))
+              if timeout > 0:
+                if self.__sock:
+                  self.__sock.settimeout(prev_timeout)
+                else:
+                  self.__serial.timeout = prev_timeout
               return bytes(rxp), True
-    if echo: print('RX;', rxp.hex(';'), ' xxx')
+    if echo:
+      print('RX;', rxp.hex(';'), ' xxx')
+    if timeout > 0:
+      if self.__sock:
+        self.__sock.settimeout(prev_timeout)
+      else:
+        self.__serial.timeout = prev_timeout
     return None, False
 
-  def MemWRITE(self, id : int, addr : int, data : bytes, echo = False) -> bool:
+  def MemWRITE(self, id: int, addr: int, data: bytes, echo=False) -> bool:
     with self.__lock:
       if ((id >= 0 and id <= 239) or id == self.BROADCASTING_ID) and addr >= 0 and addr <= 0x4ff:
         if self.TxPacket(id, self.CMD_MemWRITE, 1, W2Bs(addr) + data, echo)[1]:
@@ -172,16 +287,16 @@ class PMXProtocol:
             return True
       return False
 
-  def MemWRITE8(self, id : int, addr : int, data : Union[int, list, tuple], echo = False) -> bool:
+  def MemWRITE8(self, id: int, addr: int, data: Union[int, list, tuple], echo=False) -> bool:
     return self.MemWRITE(id, addr, B2Bs(data), echo)
 
-  def MemWRITE16(self, id : int, addr : int, data : Union[int, list, tuple], echo = False) -> bool:
+  def MemWRITE16(self, id: int, addr: int, data: Union[int, list, tuple], echo=False) -> bool:
     return self.MemWRITE(id, addr, W2Bs(data), echo)
 
-  def MemWRITE32(self, id : int, addr : int, data : Union[int, list, tuple], echo = False) -> bool:
+  def MemWRITE32(self, id: int, addr: int, data: Union[int, list, tuple], echo=False) -> bool:
     return self.MemWRITE(id, addr, L2Bs(data), echo)
 
-  def MemREAD(self, id : int, addr : int, length : int, echo = False) -> bytes:
+  def MemREAD(self, id: int, addr: int, length: int, echo=False) -> bytes:
     with self.__lock:
       if addr >= 0 and id <= 239 and addr >= 0 and addr <= 0x4ff and length > 0 and length > 0 and length <= 247:
         if self.TxPacket(id, self.CMD_MemREAD, 0, W2Bs(addr) + B2Bs(length), echo)[1]:
@@ -191,28 +306,28 @@ class PMXProtocol:
               return bytes(d[6:-2])
       return None
 
-  def MemREAD8(self, id : int, addr : int, length = 1, signed = False, echo = False) -> int:
+  def MemREAD8(self, id: int, addr: int, length=1, signed=False, echo=False) -> int:
     r = self.MemREAD(id, addr, length, echo)
-    if r != None:
+    if r is not None:
       n = sum(iter_unpack('b' if signed else 'B', r), ())
       return n if length > 1 else n[0]
     return None
 
-  def MemREAD16(self, id : int, addr : int, length = 1, signed = False, echo = False) -> int:
+  def MemREAD16(self, id: int, addr: int, length=1, signed=False, echo=False) -> int:
     r = self.MemREAD(id, addr, 2 * length, echo)
-    if r != None:
+    if r is not None:
       n = sum(iter_unpack('h' if signed else 'H', r), ())
       return n if length > 1 else n[0]
     return None
 
-  def MemREAD32(self, id : int, addr : int, length = 1, signed = False, echo = False) -> int:
+  def MemREAD32(self, id: int, addr: int, length=1, signed=False, echo=False) -> int:
     r = self.MemREAD(id, addr, 4 * length, echo)
-    if r != None:
+    if r is not None:
       n = sum(iter_unpack('i' if signed else 'I', r), ())
       return n if length > 1 else n[0]
     return None
 
-  def LOAD(self, id : int, echo = False) -> bool:
+  def LOAD(self, id: int, echo=False) -> bool:
     with self.__lock:
       if self.TxPacket(id, self.CMD_LOAD, 0, (), echo)[1]:
         if id != self.BROADCASTING_ID:
@@ -220,10 +335,10 @@ class PMXProtocol:
           if r:
             return id == d[2] and d[4] == 0x22
         else:
-          return True;
+          return True
     return False
 
-  def SAVE(self, id : int, echo = False) -> bool:
+  def SAVE(self, id: int, echo=False) -> bool:
     with self.__lock:
       if self.TxPacket(id, self.CMD_SAVE, 0, (), echo)[1]:
         if id != self.BROADCASTING_ID:
@@ -231,10 +346,10 @@ class PMXProtocol:
           if r:
             return id == d[2] and d[4] == 0x23
         else:
-          return True;
+          return True
       return False
 
-  def MotorREAD(self, id : int, echo = False) -> tuple:
+  def MotorREAD(self, id: int, echo=False) -> tuple:
     with self.__lock:
       if self.TxPacket(id, self.CMD_MotorREAD, 0, (), echo):
         if id != self.BROADCASTING_ID:
@@ -247,7 +362,7 @@ class PMXProtocol:
           return ()
       return None
 
-  def MotorWRITE(self, id : int, opt : int, dat : (), echo = False) -> tuple:
+  def MotorWRITE(self, id: int, opt: int, dat: (), echo=False) -> tuple:
     with self.__lock:
       if self.TxPacket(id, self.CMD_MotorWRITE, opt, W2Bs(dat), echo):
         if id != self.BROADCASTING_ID:
@@ -260,7 +375,7 @@ class PMXProtocol:
           return ()
       return None
 
-  def SystemREAD(self, id : int, echo = False) -> tuple:
+  def SystemREAD(self, id: int, echo=False) -> tuple:
     with self.__lock:
       if self.TxPacket(id, self.CMD_SystemREAD, 0, (), echo)[1]:
         d, r = self.RxPacket(echo)
@@ -270,7 +385,7 @@ class PMXProtocol:
             return tuple(v)
       return None
 
-  def SystemWRITE(self, id : int, data : (), echo = False) -> bool:
+  def SystemWRITE(self, id: int, data: (), echo=False) -> bool:
     if data[0] >= 0 and data[0] <= 239 and data[1] >= 0 and data[1] <= 7 and data[2] >= 0 and data[2] <= 2 and data[3] >= 1 and data[3] <= 255:
       d = self.SystemREAD(id, echo)
       if d:
@@ -281,7 +396,7 @@ class PMXProtocol:
               return id == d[2] and d[4] == 0x3c and (d[5] & (4 + 8 + 0x10 + 0x20 + 0x40)) == 0
     return False
 
-  def ReBoot(self, id : int, echo = False) -> bool:
+  def ReBoot(self, id: int, echo=False) -> bool:
     with self.__lock:
       if id != self.BROADCASTING_ID:
         if self.TxPacket(id, self.CMD_ReBoot, 0, W2Bs(0), echo)[1]:
@@ -290,10 +405,10 @@ class PMXProtocol:
             return d[2] == id and d[4] == 0x3d
       return False
 
-  def FactoryReset(self, id : int, echo = False) -> bool:
+  def FactoryReset(self, id: int, echo=False) -> bool:
     if id != self.BROADCASTING_ID:
       d = self.SystemREAD(id, echo)
-      if d != None:
+      if d is not None:
         with self.__lock:
           if self.TxPacket(id, self.CMD_FactoryReset, 0, L2Bs(d[0]), echo)[1]:
             d, r = self.RxPacket(echo)
@@ -304,7 +419,7 @@ class PMXProtocol:
   def FullScan(self) -> tuple:
     orgtimeout = self.timeout
     orgbaudrate = self.baudrate
-    baud=(57600,115200,625000,1000000,1250000,1500000,2000000,3000000)
+    baud = (57600, 115200, 625000, 1000000, 1250000, 1500000, 2000000, 3000000)
     self.timeout = 0.005
     for b in baud:
       self.baudrate = b
@@ -314,19 +429,20 @@ class PMXProtocol:
     self.timeout = orgtimeout
     self.baudrate = orgbaudrate
 
+
 ##########################################################
 # test code
 ##########################################################
 if __name__ == "__main__":
   import time
-  from pyPMX import *
+  from pyPMX import PMXProtocol
 
   try:
-    pmx = PMXProtocol('\\\\.\\COM10', 3000000)
+    pmx = PMXProtocol('\\\\.\\COM10', 115200, timeoutoffset=0.2)
   except:
     pass
   else:
-    ID = 1
+    ID = 0
 
     # reboot
     print('ReBoot=', pmx.ReBoot(ID, echo=True))
@@ -382,9 +498,9 @@ if __name__ == "__main__":
     for ang in tuple(range(0, 32000, 500)) + tuple(range(32000, -32000, -500)) + tuple(range(-32000, 500, 500)):
       for n in range(10):
         r = pmx.MotorWRITE(ID, pmx.MOTW_OPT_NONE, (ang,))
-        if r != None:
+        if r is not None:
           if len(r) > 0:
-            print(f' MotorWRITE= {r[0]},', ''.join('{:6},'.format(k) for k in r[1]), 'stat=', pmx.status, end = '\r')
+            print(f' MotorWRITE= {r[0]},', ''.join('{:6},'.format(k) for k in r[1]), 'stat=', pmx.status, end='\r')
             pmx.MemREAD(ID, 400, 6)
         else:
           pass
@@ -400,8 +516,6 @@ if __name__ == "__main__":
     time.sleep(0.1)
     print(' MotorWRITE=', pmx.MotorWRITE(ID, pmx.MOTW_OPT_FREE, ()))
 
-
-
     print(' MotorWRITE=', pmx.MotorWRITE(ID, pmx.MOTW_OPT_FREE, ()))
     time.sleep(0.1)
     # 1:pos,2:speed,4:cur,8:torq,16:pwm,32:time
@@ -414,9 +528,9 @@ if __name__ == "__main__":
     for spd in tuple(range(0, 2000, 50)) + tuple(range(2000, -2000, -50)) + tuple(range(-2000, 50, 50)):
       for n in range(30):
         r = pmx.MotorWRITE(ID, pmx.MOTW_OPT_NONE, (spd,))
-        if r != None:
+        if r is not None:
           if len(r) > 0:
-            print(f' MotorWRITE= {r[0]},', ''.join('{:6},'.format(k) for k in r[1]), 'stat=', pmx.status, end = '\r')
+            print(f' MotorWRITE= {r[0]},', ''.join('{:6},'.format(k) for k in r[1]), 'stat=', pmx.status, end='\r')
             pmx.MemREAD(ID, 400, 6)
         else:
           pass
