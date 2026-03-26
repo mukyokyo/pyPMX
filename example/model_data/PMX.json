@@ -1,0 +1,152 @@
+{
+  "PMX" : {
+    "PositionKp": [0, "I", "rw", [null, null], null, null],
+    "PositionKi": [4, "I", "rw", [null, null], null, null],
+    "PositionKd": [8, "I", "rw", [null, null], null, null],
+    "PositionStrc": [12, "I", "rw", [null, null], null, null],
+    "SpeedKp": [16, "I", "rw", [null, null], null, null],
+    "SpeedKi": [20, "I", "rw", [null, null], null, null],
+    "SpeedKd": [24, "I", "rw", [null, null], null, null],
+    "CurrentKp": [32, "I", "rw", [null, null], null, null],
+    "CurrentKi": [36, "I", "rw", [null, null], null, null],
+    "CurrentKd": [40, "I", "rw", [null, null], null, null],
+    "TorqueKp": [48, "I", "rw", [null, null], null, null],
+    "TorqueKi": [52, "I", "rw", [null, null], null, null],
+    "TorqueKd": [56, "I", "rw", [null, null], null, null],
+
+    "PositionDeadBand": [64, "h", "rw", [null, null], "º", "1/100"],
+    "SpeedDeadBand": [66, "h", "rw", [null, null], "º/s", "1/10"],
+    "CurrentDeadBand": [68, "h", "rw", [null, null], "mA", 1.0],
+    "TorqueDeadBand": [70, "h", "rw", [null, null], "mN⋅m", 1.0],
+
+    "CenterOffset": [72, "h", "rw", [null, null], "deg", "1/100"],
+
+    "CloneReverse": [74, "B", "rw", [null, null], null, null],
+
+    "MinVoltageLimit": [76, "H", "rw", [null, null], "mV", 1.0],
+    "MinVoltageLimitPower": [78, "H", "rw", [null, null], "%", 1.0],
+    "MaxVoltageLimit": [80, "H", "rw", [null, null], "mV", 1.0],
+    "MaxVoltageLimitPower": [82, "H", "rw", [null, null], "%", 1.0],
+
+    "CurrentLimit": [84, "H", "rw", [null, null], "mA", 1.0],
+    "CurrentLimitPower": [86, "H", "rw", [null, null], "%", 1.0],
+    "MotorTempLimit": [88, "h", "rw", [null, null], "ºC", "1/10"],
+    "MotorTempLimitPower": [90, "H", "rw", [null, null], "%", 1.0],
+    "CpuTempLimit": [92, "h", "rw", [null, null], "ºC", "1/10"],
+    "CpuTempLimitPowe": [94, "H", "rw", [null, null], "%", 1.0],
+
+    "CwPositionLimit": [96, "h", "rw", [null, null], "º", "1 / 100"],
+    "CwPositionLimitPower": [98, "H", "rw", [null, null], "%", 1.0],
+    "CcwPositionLimit": [100, "h", "rw", [null, null], "º", "1 / 100"],
+    "CcwPositionLimitPower": [102, "H", "rw", [null, null], "%", 1.0],
+
+    "MaxGoalSpeed": [104, "h", "rw", [null, null], "º/s", "1/10"],
+    "MaxGoalCurrent": [106, "h", "rw", [null, null], "mA", 1.0],
+    "MaxGoalTorque": [108, "h", "rw", [null, null], "mN⋅m", 1.0],
+
+    "TotalPowerRate": [110, "H", "rw", [null, null], "%", 1.0],
+
+    "LockDetectTime": [112, "H", "rw", [null, null], "ms", 1.0],
+    "LockThresholdPower": [114, "H", "rw", [null, null], "%", "1/100"],
+    "LockDetectOutputPower": [116, "H", "rw", [null, null], "%", 1.0],
+
+    "presetPosAddr": [118, "B", "rw", [null, null], null, null],
+    "presetSpdAddr": [119, "B", "rw", [null, null], null, null],
+    "presetCurAddr": [120, "B", "rw", [null, null], null, null],
+    "presetTrqAddr": [121, "B", "rw", [null, null], null, null],
+
+    "PositionKp2": [124, "I", "rw", [null, null], null, null],
+    "PositionKi2": [128, "I", "rw", [null, null], null, null],
+    "PositionKd2": [132, "I", "rw", [null, null], null, null],
+    "PositionStrc2": [136, "I", "rw", [null, null], null, null],
+    "SpeedKp2": [140, "I", "rw", [null, null], null, null],
+    "SpeedKi2": [144, "I", "rw", [null, null], null, null],
+    "SpeedKd2": [148, "I", "rw", [null, null], null, null],
+    "CurrentKp2": [156, "I", "rw", [null, null], null, null],
+    "CurrentKi2": [160, "I", "rw", [null, null], null, null],
+    "CurrentKd2": [164, "I", "rw", [null, null], null, null],
+    "TorqueKp2": [172, "I", "rw", [null, null], null, null],
+    "TorqueKi2": [176, "I", "rw", [null, null], null, null],
+    "TorqueKd2": [180, "I", "rw", [null, null], null, null],
+    "PositionKp3": [188, "I", "rw", [null, null], null, null],
+    "PositionKi3": [192, "I", "rw", [null, null], null, null],
+    "PositionKd3": [196, "I", "rw", [null, null], null, null],
+    "PositionStrc3": [200, "I", "rw", [null, null], null, null],
+    "SpeedKp3": [204, "I", "rw", [null, null], null, null],
+    "SpeedKi3": [208, "I", "rw", [null, null], null, null],
+    "SpeedKd3": [212, "I", "rw", [null, null], null, null],
+    "CurrentKp3": [220, "I", "rw", [null, null], null, null],
+    "CurrentKi3": [224, "I", "rw", [null, null], null, null],
+    "CurrentKd3": [228, "I", "rw", [null, null], null, null],
+    "TorqueKp3": [236, "I", "rw", [null, null], null, null],
+    "TorqueKi3": [240, "I", "rw", [null, null], null, null],
+    "TorqueKd3": [244, "I", "rw", [null, null], null, null],
+
+    "NowPosition": [300, "h", "r", [null, null], "º", "1/100"],
+    "NowPositionU": [300, "H", "r", [null, null], "º", "1/100"],
+    "NowSpeed": [302, "h", "r", [null, null], "º/s", "1/10"],
+    "NowCurrent": [304, "h", "r", [null, null], "mA", 1.0],
+    "NowTorque": [306, "h", "r", [null, null], "mN⋅m", 1.0],
+    "NowPwm": [308, "h", "r", [null, null], "%", "1/100"],
+    "MotorTemp": [310, "h", "r", [null, null], "ºC", "1/10"],
+    "CPUTemp": [312, "h", "r", [null, null], "ºC", "1/10"],
+    "InputVoltage": [314, "H", "r", [null, null], "mV", "1/10"],
+    "TrajectoryTime": [316, "H", "r", [null, null], "ms", 1.0],
+    "EncoderValue": [318, "H", "r", [null, null], null, null],
+
+    "ErrorStatus": [400, "B", "r", [null, null], null, null],
+    "ErrorSystem": [401, "B", "r", [null, null], null, null],
+    "ErrorMotor": [402, "B", "r", [null, null], null, null],
+    "ErrorRamAccess": [404, "H", "r", [null, null], null, null],
+
+    "TorqueSwitch": [500, "B", "rw", [null, null], null, null],
+
+    "ControlMode": [501, "B", "rw", [null, null], null, null],
+
+    "MotorReceiveData": [502, "B", "rw", [null, null], null, null],
+
+    "Trajectory": [503, "B", "rw", [null, null], null, null],
+
+    "ShortBrakeCurrent": [530, "B", "rw", [null, null], null, null],
+    "ShortBrakeTorque": [531, "B", "rw", [null, null], null, null],
+    "ShortBrakePWM": [532, "B", "rw", [null, null], null, null],
+
+    "LedMode": [533, "B", "rw", [null, null], null, null],
+
+    "CenterOffsetMinRange": [600, "h", "r", [null, null], null, null],
+    "CenterOffsetMaxRange": [602, "h", "r", [null, null], null, null],
+    "MinVoltageMinRange": [604, "H", "r", [null, null], null, null],
+    "MinVoltageMaxRange": [606, "H", "r", [null, null], null, null],
+    "MaxVoltageMinRange": [608, "H", "r", [null, null], null, null],
+    "MaxVoltageMaxRange": [610, "H", "r", [null, null], null, null],
+    "FailSafeVoltageMinRange": [612, "H", "r", [null, null], null, null],
+    "FailSafeVoltageMaxRange": [614, "H", "r", [null, null], null, null],
+    "CurrentMinRange": [616, "H", "r", [null, null], null, null],
+    "CurrentMaxRange": [618, "H", "r", [null, null], null, null],
+    "MotorTempMinRange": [620, "h", "r", [null, null], null, null],
+    "MotorTempMaxRange": [622, "h", "r", [null, null], null, null],
+    "CpuTempMinRange": [624, "h", "r", [null, null], null, null],
+    "CpuTempMaxRange": [626, "h", "r", [null, null], null, null],
+    "CwPositionMinRange": [628, "h", "r", [null, null], null, null],
+    "CwPositionMaxRange": [630, "h", "r", [null, null], null, null],
+    "CcwPositionMinRange": [632, "h", "r", [null, null], null, null],
+    "CcwPositionMaxRange": [634, "h", "r", [null, null], null, null],
+    "MaxGoalSpeedMinRange": [636, "h", "r", [null, null], null, null],
+    "MaxGoalSpeedMaxRange": [638, "h", "r", [null, null], null, null],
+    "MaxGoalCurrentMinRange": [640, "h", "r", [null, null], null, null],
+    "MaxGoalCurrentMaxRange": [642, "h", "r", [null, null], null, null],
+    "MaxGoalTorqueMinRange": [644, "h", "r", [null, null], null, null],
+    "MaxGoalTorqueMaxRange": [646, "h", "r", [null, null], null, null],
+
+    "GoalCommandValue1": [700, "h", "rw", [null, null], null, null],
+    "GoalCommandValue2": [701, "h", "rw", [null, null], null, null],
+    "GoalCommandValue3": [702, "h", "rw", [null, null], null, null]
+  },
+
+  "models":{
+    "0x2B6723F4": {"modelname": "PMX-SCR-9204HV", "controltable": "PMX"},
+    "0x2B6723F3": {"modelname": "PMX-SCR-9203HV", "controltable": "PMX"},
+    "0x2B671454": {"modelname": "PMX-SCR-5204HV", "controltable": "PMX"},
+    "0x2B671453": {"modelname": "PMX-SCR-5203HV", "controltable": "PMX"}
+  }
+}
