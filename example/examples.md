@@ -28,7 +28,7 @@ If successful, the memory map will be assigned as a property of PMX0, so you can
 Note that some parameters have coefficient to SI units, which can be accessed by adding the `.phys` suffix as a subproperty. As mentioned earlier, you can also redefine the parameters yourself.
 ``` python
   PMX0.updateitems({
-    'PresentValue': (300, "hhh", "r", (None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
+    'PresentValue': (300, "hhh", "r", (None, None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
     'GoalPosSpd': (700, 'hh', 'rw', (None, None), ('º', 'º/s'), (1 / 100, 1 / 10)),
   })
   print(PMX0.PresentValue.phys)
