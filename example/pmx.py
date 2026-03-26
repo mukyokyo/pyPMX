@@ -197,7 +197,16 @@ class pmx:
         raise AttributeError(f'{name} is Read-Only')
       v_min, v_max = val_range
       if v_min is not None and v_max is not None:
-        if not (v_min <= value <= v_max):
+        if isinstance(v_min, list | tuple) and isinstance(v_max, list | tuple) and isinstance(value, list | tuple):
+          newvalue = list(value)
+          for i, (_vmin, _vmax, _v) in enumerate(zip(v_min, v_max, newvalue)):
+            if not (_vmin <= _v <= _vmax):
+              _nv = min(max(_v, _vmin), _vmax)
+              warnings.warn(f'Out of Range: {name} ({_v}) must be {_vmin}~{_vmax}. Clipped at {_nv}', UserWarning)
+              newvalue[i] = _nv
+          value = list(newvalue)
+
+        elif not (v_min <= value <= v_max):
           newvalue = min(max(value, v_min), v_max)
           warnings.warn(f'Out of Range: {name} ({value}) must be {v_min}~{v_max}. Clipped at {newvalue}', UserWarning)
           value = newvalue
@@ -224,7 +233,6 @@ class pmx:
 
 if __name__ == '__main__':
   from time import sleep, time
-  from contextlib import contextmanager
 
   def wait(t):
     end_time = time() + t
@@ -238,11 +246,11 @@ if __name__ == '__main__':
 
     # Add properties based on the angle and velocity cascade
     p.updateitems({
-      'PresentValue': (300, "hhh", "r", (None, None), ('º','º/s','mA'), (1/100,1/10,1.0)),
+      'PresentValue': (300, "hhh", "r", (None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
       'GoalPos': (700, 'h', 'rw', (None, None), 'º', 1 / 100),
-      'GoalPosSpd': (700, 'hh', 'rw', (None, None), ('º', 'º/s'), (1 / 100, 1/10)),
+      'GoalPosSpd': (700, 'hh', 'rw', (None, None), ('º', 'º/s'), (1 / 100, 1 / 10)),
       'GoalPosSpdCur': (700, 'hhh', 'rw', (None, None), ('º', 'º/s', 'mA'), (1 / 100, 1/10, 1.0)),
-      'GoalSpdCur': (700, 'hh', 'rw', (None, None), ('º/s', 'mA'), (1/10, 1.0)),
+      'GoalSpdCur': (700, 'hh', 'rw', (None, None), ('º/s', 'mA'), (1 / 10, 1.0)),
     })
 
     # Set the control mode (position)
