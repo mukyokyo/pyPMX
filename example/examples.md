@@ -4,7 +4,7 @@ When using this, make sure to place `pyPMX.py` in the same directory.
 Since “pyPMX.py” also contains code for unit testing, please use that to handle simple tests.<br>
 This directory contains scripts for changing IDs and baud rates, as well as for searching for them if you've forgotten them.
 
-Furthermore, I have prepared a script (`pmx.py`) that operates the PMX using the names of parameters assigned in the memory map, without relying on serial communication or dedicated commands. This script defines the pxm class; by instantiating it and associating a single PXM with it, you can utilize its functions. The memory map is generated based on a JSON file located in the `model_data` directory, but you can add parameters via code as needed.<br>
+Furthermore, I have prepared a script (`pmx.py`) that operates the PMX using the names of parameters assigned in the memory map, without relying on serial communication or dedicated commands. This script defines the pmx class; by instantiating it and associating a single PMX with it, you can utilize its functions. The memory map is generated based on a JSON file located in the `model_data` directory, but you can add parameters via code as needed.<br>
 I’ll briefly touch on `pmx.py` below.
 
 Use `pyPMX` to initialize the interface, then pass the instance and the PMX ID to `pmx` to instantiate it.
