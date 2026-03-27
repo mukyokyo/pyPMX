@@ -9,7 +9,7 @@ I’ll briefly touch on `pmx.py` below.
 
 Use `pyPMX` to initialize the interface, then pass the instance and the PMX ID to `pmx` to instantiate it.
 ``` python
-from pyPMX import DXLProtocolV2
+from pyPMX import PMXProtocol
 from pmx import pmx
 with PMXProtocol('\\\\.\\COM10', 115200, timeoutoffset=0.1) as pmx_if:
   PMX0 = pmx(pmx_if, 0)
