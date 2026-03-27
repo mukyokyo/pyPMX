@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from pyPMX import PMXProtocol
 import warnings, struct, contextlib, json, os
@@ -49,18 +48,18 @@ class pmx:
     self._model_index = self._build_index('model_data/')
     self._pmx = pmx_instance
     self._id = pmx_id
-    sysinfo = self._pmx.SystemREAD(pmx_id)
-    if sysinfo is not None:
-      json_path = self._model_index['models'].get(f'0x{sysinfo[1]:08X}')
+    self._sysinfo = self._pmx.SystemREAD(pmx_id)
+    if self._sysinfo is not None:
+      json_path = self._model_index['models'].get(f'0x{self._sysinfo[1]:08X}')
       if not json_path:
         self._modelname = None
         self._items = {}
         self._firmware_version = None
         raise Exception(f'Model(0x{sysinfo[1]:08X}) is not supported.')
       else:
-        model_info = self._model_index.get('models').get(f'0x{sysinfo[1]:08X}')
+        model_info = self._model_index.get('models').get(f'0x{self._sysinfo[1]:08X}')
         self._modelname = model_info.get('modelname')
-        self._firmware_version = sysinfo[2]
+        self._firmware_version = self._sysinfo[2]
         self._items = self._model_index.get(model_info.get('controltable')).copy()
         self._items.update(model_info.get('overrides', {}))
     else:
@@ -77,6 +76,36 @@ class pmx:
   @property
   def id(self):
     return self._id
+
+  @id.setter
+  def id(self, newid):
+    if newid >= 0 and newid <= 239 and self._id != newid:
+      if self._pmx.MemREAD8(newid, 0) is None:
+        if self._pmx.MotorWRITE(self._id, self._pmx.MOTW_OPT_FREE, ()) is not None:
+          baudind = [k for k, v in self.BaudrateList.items() if v == self._pmx.baudrate][0]
+          s = (newid, baudind, self._pmx.SYSW_PARITY_NONE, self._sysinfo[3])
+          if self._pmx.SystemWRITE(self._id, s):
+            self._id = newid
+
+  @property
+  def baudrate(self):
+    return self._pmx.baudrate
+
+  @baudrate.setter
+  def baudrate(self, newbaud):
+    prevbaud = self._pmx.baudrate
+    if newbaud != prevbaud:
+      baudind = [k for k, v in self.BaudrateList.items() if v == newbaud]
+      if baudind is not None:
+        self._pmx.baudrate = newbaud
+        if self._pmx.MemREAD8(self._id, 0) is None:
+          self._pmx.baudrate = prevbaud
+          if self._pmx.MotorWRITE(self._id, self._pmx.MOTW_OPT_FREE, ()) is not None:
+            s = (self._id, baudind[0], self._pmx.SYSW_PARITY_NONE, self._sysinfo[3])
+            if self._pmx.SystemWRITE(self._id, s):
+              self._pmx.baudrate = newbaud
+              return
+      self._pmx.baudrate = prevbaud
 
   @property
   def modelname(self):
@@ -190,6 +219,9 @@ class pmx:
     if name.startswith('_'):
       self.__dict__[name] = value
       return
+    elif name == 'id' or name == 'baudrate':
+      super().__setattr__(name, value)      
+      return
 
     if name in self._items:
       addr, fmt, access, val_range, _, _ = self._items[name]
@@ -215,21 +247,13 @@ class pmx:
       else:
         wvalue = struct.pack('<' + fmt, value)
 
-      if self._pmx.MemWRITE(self.id, addr, wvalue):
-        if name == 'ID':
-          self._id = value
-        if name == 'Baudrate':
-          baud = self.BaudrateList.get(value)
-          if baud is not None:
-            self._pmx.baudrate = baud
-      else:
+      if not self._pmx.MemWRITE(self.id, addr, wvalue):
         if self._pmx.status == 0:
           warnings.warn('Write operation failed. It appears to be a receve timeout.', UserWarning)
         else:
           raise self.WriteError(f'Write operation failed. Error code:${self._dx.status:02X}({self.StatusError.get(self._dx.status & 0x7F, "")})')
     else:
       raise AttributeError(f'No such item: {name}')
-
 
 if __name__ == '__main__':
   from time import sleep, time
@@ -239,14 +263,20 @@ if __name__ == '__main__':
     while end_time > time():
       yield
 
-  with PMXProtocol('\\\\.\\COM20', 115200, timeoutoffset=3.0) as pmx_if:
+  with PMXProtocol('\\\\.\\COM20', 115200, timeoutoffset=1.0) as pmx_if:
     # Instance the PMX with ID 0
     p = pmx(pmx_if, 0)
     print(p.id, p.modelname, p.firmwareversion)
 
+    print(p.id)
+    p.id = 0
+    print(p.baudrate)
+    p.baudrate = 115200
+
     # Add properties based on the angle and velocity cascade
     p.updateitems({
       'PresentValue': (300, "hhh", "r", (None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
+      'PresentValue2': (300, "Hhh", "r", (None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
       'GoalPos': (700, 'h', 'rw', (None, None), 'º', 1 / 100),
       'GoalPosSpd': (700, 'hh', 'rw', (None, None), ('º', 'º/s'), (1 / 100, 1 / 10)),
       'GoalPosSpdCur': (700, 'hhh', 'rw', (None, None), ('º', 'º/s', 'mA'), (1 / 100, 1/10, 1.0)),
@@ -258,10 +288,10 @@ if __name__ == '__main__':
     p.ControlMode = 1
     print(f'Control_Mode={bin(p.ControlMode)}')
     p.TorqueSwitch = 1
-    for i in tuple(range(0, 180, 60)) + tuple(range(180, -180, -60)) + tuple(range(-180, 0, 60)):
+    for i in tuple(range(0, 320, 40)) + tuple(range(320, -320, -40)) + tuple(range(-320, 0, 40)):
       p.GoalPos.phys = i
       for _ in wait(0.5):
-        print(p.GoalPos.phys, p.PresentValue.str, p.MotorTemp.str, end='     \r')
+        print(p.GoalPos.phys, p.PresentValue.str, p.MotorTemp.str, end='\033[K\r')
     else:
       print()
 
@@ -270,10 +300,10 @@ if __name__ == '__main__':
     p.ControlMode = 1 | 2
     print(f'Control_Mode={bin(p.ControlMode)}')
     p.TorqueSwitch = 1
-    for i in tuple(range(0, 180, 60)) + tuple(range(180, -180, -60)) + tuple(range(-180, 0, 60)):
+    for i in tuple(range(0, 320, 80)) + tuple(range(320, -320, -80)) + tuple(range(-320, 0, 80)):
       p.GoalPosSpd.phys = i, 100
       for _ in wait(1.0):
-        print(p.GoalPosSpd.phys, p.PresentValue.str, p.MotorTemp.str, end='     \r')
+        print(p.GoalPosSpd.phys, p.PresentValue.str, p.MotorTemp.str, end='\033[K\r')
     else:
       print()
 
@@ -282,10 +312,10 @@ if __name__ == '__main__':
     p.ControlMode = 1 | 2 | 4
     print(f'Control_Mode={bin(p.ControlMode)}')
     p.TorqueSwitch = 1
-    for i in tuple(range(0, 180, 60)) + tuple(range(180, -180, -60)) + tuple(range(-180, 0, 60)):
-      p.GoalPosSpdCur.phys = i, 100, 100
+    for i in tuple(range(0, 320, 80)) + tuple(range(320, -320, -80)) + tuple(range(-320, 0, 80)):
+      p.GoalPosSpdCur.phys = i, 100, 160
       for _ in wait(1.0):
-        print(p.GoalPosSpdCur.phys, p.PresentValue.str, p.MotorTemp.str, end='     \r')
+        print(p.GoalPosSpdCur.phys, p.PresentValue.str, p.MotorTemp.str, end='\033[K\r')
     else:
       print()
 
@@ -297,7 +327,7 @@ if __name__ == '__main__':
     for i in tuple(range(0, 200, 20)) + tuple(range(200, -200, -20)) + tuple(range(-200, 0, 20)):
       p.GoalSpdCur.phys = i, 500
       for _ in wait(1.0):
-        print(p.GoalSpdCur.phys, p.PresentValue.str, p.MotorTemp.str, end='     \r')
+        print(p.GoalSpdCur.phys, p.PresentValue2.str, p.MotorTemp.str, end='\033[K\r')
     else:
       print()
 
