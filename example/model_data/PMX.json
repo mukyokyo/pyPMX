@@ -139,8 +139,8 @@
     "MaxGoalTorqueMaxRange": [646, "h", "r", [null, null], null, null],
 
     "GoalCommandValue1": [700, "h", "rw", [null, null], null, null],
-    "GoalCommandValue2": [701, "h", "rw", [null, null], null, null],
-    "GoalCommandValue3": [702, "h", "rw", [null, null], null, null]
+    "GoalCommandValue2": [702, "h", "rw", [null, null], null, null],
+    "GoalCommandValue3": [704, "h", "rw", [null, null], null, null]
   },
 
   "models":{
