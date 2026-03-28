@@ -43,7 +43,11 @@ class pmx:
           return data
     return data
 
+  def _custom_formatwarning(self, message, category, filename, lineno, line=None):
+    return f'{category.__name__}: {message}\n'
+
   def __init__(self, pmx_instance, pmx_id):
+    warnings.formatwarning = self._custom_formatwarning
     self._cache = {}
     self._model_index = self._build_index('model_data/')
     self._pmx = pmx_instance
@@ -113,7 +117,10 @@ class pmx:
 
   @property
   def firmwareversion(self):
-    return self._firmware_version
+    if self._firmware_version is not None:
+      return tuple(self._firmware_version.to_bytes(4))
+    else:
+      return None
 
   @property
   def items(self):
@@ -121,6 +128,10 @@ class pmx:
 
   def updateitems(self, itm):
     self._items.update(itm)
+
+  def dump(self):
+    for i in self._items:
+      print(f'{self._items[i][0]}:{i}={self.__getattr__(i)}')
 
   def _genstr(self, val, coef, unit):
     ret = ''
@@ -258,74 +269,105 @@ class pmx:
 
 if __name__ == '__main__':
   from time import sleep, time
-  import traceback
+  import traceback, sys, os
 
   def wait(t):
     end_time = time() + t
     while end_time > time():
       yield
 
-  with PMXProtocol('\\\\.\\COM20', 115200, timeoutoffset=1.0) as pmx_if:
+  with PMXProtocol('\\\\.\\COM3', 115200, timeoutoffset=0.3) as pmx_if:
     try:
-      # Instance the PMX with ID 0
-      p = pmx(pmx_if, 0)
-      print(p.id, p.modelname, p.firmwareversion)
+      # List only the instances of PMX that were found as p
+      p = []
+      for i in range(10):
+        p += pmx(pmx_if, i),
+        if p[-1].modelname is not None:
+          # Add properties based on the angle and velocity cascade
+          p[-1].updateitems({
+            'PresentValue': (300, "hhh", "r", (None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
+            'PresentValue2': (300, "Hhh", "r", (None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
+            'GoalPos': (700, 'h', 'rw', (-32000, 32000), 'º', 1 / 100),
+            'GoalCur': (700, 'h', 'rw', (-3800, 3800), 'mA', 1.0),
+            'GoalPosSpd': (700, 'hh', 'rw', ((-32000, -3800), (32000, 3800)), ('º', 'º/s'), (1 / 100, 1 / 10)),
+            'GoalPosSpdCur': (700, 'hhh', 'rw', ((-32000, -4700, -3800), (32000, 4700, 3800)), ('º', 'º/s', 'mA'), (1 / 100, 1 / 10, 1.0)),
+            'GoalSpdCur': (700, 'hh', 'rw', ((-3800, -4700), (3800, 4700)), ('º/s', 'mA'), (1 / 10, 1.0)),
+          })
+          print(p[-1].id, p[-1].modelname, p[-1].firmwareversion)
+        else:
+          p.pop(-1)
+      else:
+        print()
 
-      # Add properties based on the angle and velocity cascade
-      p.updateitems({
-        'PresentValue': (300, "hhh", "r", (None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
-        'PresentValue2': (300, "Hhh", "r", (None, None), ('º','º/s','mA'), (1 / 100, 1 / 10, 1.0)),
-        'GoalPos': (700, 'h', 'rw', (None, None), 'º', 1 / 100),
-        'GoalPosSpd': (700, 'hh', 'rw', (None, None), ('º', 'º/s'), (1 / 100, 1 / 10)),
-        'GoalPosSpdCur': (700, 'hhh', 'rw', (None, None), ('º', 'º/s', 'mA'), (1 / 100, 1 / 10, 1.0)),
-        'GoalSpdCur': (700, 'hh', 'rw', (None, None), ('º/s', 'mA'), (1 / 10, 1.0)),
-      })
+      if p == []:
+        sys.exit()
+
+      # Although multiple PMXs are listed, for now, only the first one found (p[0]) is being operated.
+      p[0].dump()
+      input('Waiting for the Enter key to be pressed...')
+
+      # Print some of the maximum values
+      print(f'CwPositionLimit={p[0].CwPositionLimit}')
+      print(f'MaxGoalSpeed={p[0].MaxGoalSpeed}')
+      print(f'MaxGoalCurrent={p[0].MaxGoalCurrent}')
 
       # Set the control mode (position)
-      p.TorqueSwitch = 2
-      p.ControlMode = 1
-      print(f'Control_Mode={bin(p.ControlMode)}')
-      p.TorqueSwitch = 1
-      for i in tuple(range(0, 320, 40)) + tuple(range(320, -320, -40)) + tuple(range(-320, 0, 40)):
-        p.GoalPos.phys = i
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_FREE
+      p[0].ControlMode = 1
+      print(f'Control_Mode={bin(p[0].ControlMode)}')
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_TORQUEON
+      for i in tuple(range(0, 360, 40)) + tuple(range(360, -360, -40)) + tuple(range(-360, 0, 40)):
+        p[0].GoalPos.phys = i
         for _ in wait(0.5):
-          print(p.GoalPos.phys, p.PresentValue.str, p.MotorTemp.str, end='\033[K\r')
+          print(p[0].GoalPos.phys, p[0].PresentValue.str, p[0].MotorTemp.str, end='\033[K\r')
       else:
         print()
 
       # Set the control mode (position & speed)
-      p.TorqueSwitch = 2
-      p.ControlMode = 1 | 2
-      print(f'Control_Mode={bin(p.ControlMode)}')
-      p.TorqueSwitch = 1
-      for i in tuple(range(0, 320, 80)) + tuple(range(320, -320, -80)) + tuple(range(-320, 0, 80)):
-        p.GoalPosSpd.phys = i, 100
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_FREE
+      p[0].ControlMode = 1 | 2
+      print(f'Control_Mode={bin(p[0].ControlMode)}')
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_TORQUEON
+      for i in tuple(range(0, 360, 80)) + tuple(range(360, -360, -80)) + tuple(range(-360, 0, 80)):
+        p[0].GoalPosSpd.phys = i, 100
         for _ in wait(1.0):
-          print(p.GoalPosSpd.phys, p.PresentValue.str, p.MotorTemp.str, end='\033[K\r')
+          print(p[0].GoalPosSpd.phys, p[0].PresentValue.str, p[0].MotorTemp.str, end='\033[K\r')
       else:
         print()
 
       # Set the control mode (position & speed & current)
-      p.TorqueSwitch = 2
-      p.ControlMode = 1 | 2 | 4
-      print(f'Control_Mode={bin(p.ControlMode)}')
-      p.TorqueSwitch = 1
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_FREE
+      p[0].ControlMode = 1 | 2 | 4
+      print(f'Control_Mode={bin(p[0].ControlMode)}')
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_TORQUEON
       for i in tuple(range(0, 320, 80)) + tuple(range(320, -320, -80)) + tuple(range(-320, 0, 80)):
-        p.GoalPosSpdCur.phys = i, 100, 160
+        p[0].GoalPosSpdCur.phys = i, 100, 160
         for _ in wait(1.0):
-          print(p.GoalPosSpdCur.phys, p.PresentValue.str, p.MotorTemp.str, end='\033[K\r')
+          print(p[0].GoalPosSpdCur.phys, p[0].PresentValue.str, p[0].MotorTemp.str, end='\033[K\r')
       else:
         print()
 
       # Set the control mode (speed & current)
-      p.TorqueSwitch = 2
-      p.ControlMode = 2 | 4
-      print(f'Control_Mode={bin(p.ControlMode)}')
-      p.TorqueSwitch = 1
-      for i in tuple(range(0, 200, 20)) + tuple(range(200, -200, -20)) + tuple(range(-200, 0, 20)):
-        p.GoalSpdCur.phys = i, 500
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_FREE
+      p[0].ControlMode = 2 | 4
+      print(f'Control_Mode={bin(p[0].ControlMode)}')
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_TORQUEON
+      for i in tuple(range(0, 400, 25)) + tuple(range(400, -400, -25)) + tuple(range(-400, 0, 25)):
+        p[0].GoalSpdCur.phys = i, 500
         for _ in wait(1.0):
-          print(p.GoalSpdCur.phys, p.PresentValue2.str, p.MotorTemp.str, end='\033[K\r')
+          print(p[0].GoalSpdCur.phys, p[0].PresentValue2.str, p[0].MotorTemp.str, end='\033[K\r')
+      else:
+        print()
+
+      # Set the control mode (current)
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_FREE
+      p[0].ControlMode = 4
+      print(f'Control_Mode={bin(p[0].ControlMode)}')
+      p[0].TorqueSwitch = pmx_if.MOTW_OPT_TORQUEON
+      for i in tuple(range(0, 4000, 200)) + tuple(range(4000, -4000, -200)) + tuple(range(-4000, 0, 200)):
+        p[0].GoalCur.phys = i
+        for _ in wait(0.2):
+          print(p[0].GoalCur.phys, p[0].PresentValue2.str, p[0].MotorTemp.str, end='\033[K\r')
       else:
         print()
 
@@ -336,5 +378,7 @@ if __name__ == '__main__':
       traceback.print_exc()
       print('------------------------')
     finally:
-      sleep(0.3)
-      p.TorqueSwitch = 2
+      if p != []:
+        sleep(0.3)
+        for _p in p:
+          _p.TorqueSwitch = 2
